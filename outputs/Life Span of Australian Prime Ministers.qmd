@@ -1,0 +1,187 @@
+---
+title: "Life Span of Australian Prime Ministers"
+author: "Hari Lee"
+format: pdf
+date: "today"
+date-format: long
+number-sections: true
+thanks: "Code and data from this analysis are available at: https://github.com/hari-lr/Australian-Prime-Ministers-Lifespan/tree/main/outputs"
+bibliography: references.bib
+---
+```{r}
+#| message: false
+#| echo: false
+#| warning: false
+
+### Work Space Setup ###
+
+library(babynames)
+library(here)
+library(httr)
+library(rvest)
+library(tidyverse)
+library(janitor)
+library(knitr)
+library(lubridate)
+library(purrr)
+library(xml2)
+
+```
+
+```{r}
+#| message: false
+#| echo: false
+#| warning: false
+# The following code and functions are referenced from: https://tellingstorieswithdata.com/07-gather.html#prime-ministers-of-the-united-kingdom
+
+#SIMULATE DATA
+set.seed(853)
+
+simulated_dataset <-
+  tibble(
+    prime_minister = babynames |>
+      filter(prop > 0.01) |>
+      distinct(name) |>
+      unlist() |>
+      sample(size = 10, replace = FALSE),
+    birth_year = sample(1700:1990, size = 10, replace = TRUE),
+    years_lived = sample(50:100, size = 10, replace = TRUE),
+    death_year = birth_year + years_lived
+  ) |>
+  select(prime_minister, birth_year, death_year, years_lived) |>
+  arrange(birth_year)
+
+```
+
+```{r}
+#| message: false
+#| echo: false
+#| warning: false
+
+#SCRAPE DATA
+raw_data <-
+  read_html(
+    "https://en.wikipedia.org/wiki/List_of_prime_ministers_of_Australia"
+  )
+write_html(raw_data, "pms.html")
+
+#READ DATA
+raw_data <- read_html("pms.html")
+
+```
+
+```{r}
+#| message: false
+#| echo: false
+#| warning: false
+
+#PARSE DATA
+parse_data_selector_gadget <-
+  raw_data |>
+  html_element(".wikitable") |>
+  html_table()
+
+parsed_data <-
+  parse_data_selector_gadget |> 
+  clean_names() |> 
+  rename(raw_text = `name_birth_death_constituency`) |> 
+  select(raw_text) |> 
+  filter(raw_text != "Name (Birth-Death) Constituency") |> 
+  distinct() 
+```
+
+```{r}
+#| message: false
+#| echo: false
+#| warning: false
+
+#CLEAN DATA
+initial_clean <-
+  parsed_data |>
+  separate(
+    raw_text, into = c("name", "not_name"), sep = "\\(", extra = "merge",
+  ) |> 
+  
+  mutate(date = str_extract(not_name, "[[:digit:]]{4}–[[:digit:]]{4}"),
+         born = str_extract(not_name, "[[:space:]][[:digit:]]{4}")
+         ) |>
+  select(name, date, born)
+  
+
+aus_cleaned_data <-
+  initial_clean |>
+  separate(date, into = c("birth", "died"), 
+           sep = "–") |>
+  mutate(
+    born = str_remove_all(born, "born[[:space:]]"),
+    birth = if_else(!is.na(born), born, birth)
+  ) |> # Alive PMs have slightly different format
+  select(-born) |>
+  rename(born = birth) |> 
+  mutate(across(c(born, died), as.integer)) |> 
+  mutate(Age_at_Death = died - born) |> 
+  distinct() # Some of the PMs had two goes at it.
+```
+
+
+
+# Plan
+In the planning stage, I sketched and simulated a data set mirroring information about Australian Prime Ministers. The sketch outlined the Prime Minister's name, birth year, anticipated lifespan, and the death year.
+
+Then, data was simulated, collected, cleaned, and analyzed using the open-source statistical programming software R [@R-base]. This process involved various packages within R, including `tidyverse` [@tidyverse], `citervest` [@citervest], `httr` [@citehttr], `janitor` [@janitor], `here` [@here], `knitr` [@citeknitr], `tidyr` [@citetidyr], `lubridate` [@GrolemundWickham2011] and `purrr`[@citepurrr]. Aditionally, code was referenced from `Telling Stories with Data - 7 Gather data` [@Alexander_2023]. 
+
+To simulate the data, I employed the tibble function and included a set seed to ensured reproducibility. For realistic Prime Minister names, I used the [@citebabynames] data set. From this data set I filtered names with a significant frequency (prop > 0.01). The birth year was then randomly sampled within a range spanning the 18th to the late 20th century. The simulation introduced variability by randomly assigning lifespans between 50 and 100 years. Ultimately, the death year was derived by adding the birth year to the simulated years lived.
+
+
+
+# Data Source
+The data was sourced from Wikipedia, a widely used platform for collecting and presenting information. Wikipedia aggregates data from various reputable sources, providing a centralized location for information retrieval. However, it's crucial to acknowledge potential discrepancies or inaccuracies, as Wikipedia content is user-contributed and subject to change. 
+
+
+# Data
+This Wikipedia article outlines information about the role and history of the Prime Ministers of Australia [@WikiAus] , offering insights into the constitutional framework, the process of appointment, and the historical context of individuals who have held the position. It details key aspects such as the appointment by the governor-general, the lack of a fixed term for prime ministers, and the factors that might lead to their departure from office, including resignations, electoral losses, and even dismissals.
+
+The table used for this exercise provides a chronological list of the Prime Ministers of Australia, including key details such as their birth and death years, constituency, election and parliamentary terms, political party affiliation, ministry, reigning monarch, and governor-general during their tenure. 
+
+## Scrape Data
+For the initial part of the code I used the read_html function from the rvest package to scrape the content of the Wikipedia page listing Australian Prime Ministers. Then wrote the HTML content to a file named "pms.html."
+
+## Parse Data
+I used html_element and html_table functions from the rvest package to extract tables from the HTML content. Then I parsed the table into a data frame using the clean_names function to standardize column names. The resulting data frame is named parse_data_selector_gadget. I further cleaned the data by renaming the relevant column to "raw_text," selecting only the rows with valid data, and removing duplicate entries.
+
+## Clean Data
+To clean the data, I employed the separate function from the tidyr package into the "raw_text" column, splitting it into two columns: "name" and "not_name," based on the opening parenthesis. The str_extract function from the stringr package is then used to extract the "date" (years of service) and "born" (birth year) information from the "not_name" column. The "date" column is further split into "birth" and "died" columns using the separate function. The "born" and "birth" columns are reconciled to handle differences in formatting for Prime Ministers who are still alive. Finally, the table is created with columns "Prime Minister," "Birth year," "Death year," and "Age at death," and duplicate rows are removed.
+
+## Create a Table
+
+I cleaned and formatted data and stored in the aus_cleaned_data data frame. Then, I displayed it as a table using the kable function from the knitr package. The column names are customized, and the first row (which usually contains column descriptions) is excluded with the slice(-1) function.
+
+```{r}
+#| message: false
+#| echo: false
+#| warning: false
+
+# Create a Table 
+aus_cleaned_data |>
+  slice(-1) |>
+  kable(
+    col.names = c("Prime Minister", "Birth year", "Death year", "Age at death")
+    )
+
+```
+
+
+# Results
+After analyzing the dataset of Australian Prime Ministers' birth years, death years, and ages at death reveals interesting patterns into the country's political history. The average age at death for the Prime Ministers in the data set is approximately 74 years, reflecting a diverse range of lifespans. Some leaders, like Gough Whitlam, lived notably longer, reaching the age of 98, while others, such as Billy Hughes, had shorter lives.
+
+The data set also highlights the temporal distribution of Prime Ministers, spanning from the late 19th century with Edmund Barton to contemporary figures like Scott Morrison. Examining the age at death provides a historical perspective on the challenges and circumstances faced by these leaders during their terms.
+
+# Reflection
+
+The most time-consuming part of the data processing was the cleaning phase, particularly the separation of raw data strings into different columns based on the parenthesis. This step required careful consideration of the structure of the data and ensuring that the separation was accurate and consistent. Once I successfully solve this challenge, the data cleaning process flowed more smoothly.
+
+While I wouldn't categorize the experience as "fun," there was a noticeable shift from struggling to a more efficient workflow after cleaning the data.
+
+A key takeaway is the importance of thoroughly understanding the guidelines and conditions for extracting specific data elements. In future projects, I would invest more time analyzing string data structure to make the cleaning process more effective. 
+
+# References

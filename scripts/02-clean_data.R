@@ -5,10 +5,20 @@
 # Email: hari.leerobledo@mail.utoronto.ca
 # Pre-requisites: none
 
-```{r}
-#| message: false
-#| echo: false
-#| warning: false
+### Work Space Setup ###
+
+library(babynames)
+library(here)
+library(httr)
+library(rvest)
+library(tidyverse)
+library(janitor)
+library(knitr)
+library(lubridate)
+library(purrr)
+library(xml2)
+
+# Code is referenced from: https://tellingstorieswithdata.com/07-gather.html#prime-ministers-of-the-united-kingdom
 
 #CLEAN DATA
 initial_clean <-

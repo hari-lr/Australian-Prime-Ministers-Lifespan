@@ -6,10 +6,6 @@
 # Pre-requisites: none
 
 
-#| message: false
-#| echo: false
-#| warning: false
-
 ### Work Space Setup ###
 
 library(babynames)
